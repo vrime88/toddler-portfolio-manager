@@ -89,6 +89,37 @@
     </div>
 
     <script>
+        // ===== PASSWORD PROTECTION =====
+        // Set your password here (change "mypassword" to your desired password)
+        const APP_PASSWORD = "mypassword";
+        const PASSWORD_KEY = "investment_tracker_auth";
+        
+        // Check if already authenticated
+        function checkAuth() {
+            const saved = sessionStorage.getItem(PASSWORD_KEY);
+            if (saved === APP_PASSWORD) {
+                return true;
+            }
+            
+            // Prompt for password
+            const entered = prompt("🔐 Enter password to access the Investment Tracker:");
+            if (entered === APP_PASSWORD) {
+                sessionStorage.setItem(PASSWORD_KEY, entered);
+                return true;
+            } else if (entered !== null) {
+                alert("❌ Incorrect password!");
+                return false;
+            }
+            return false;
+        }
+        
+        // Protect the app
+        if (!checkAuth()) {
+            document.body.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(to bottom right, #fbcfe8, #c084fc, #93c5fd); font-family: sans-serif;"><div style="text-align: center;"><div style="font-size: 4rem; margin-bottom: 1rem;">🔒</div><p style="font-size: 1.5rem; font-weight: bold; color: #7c3aed;">Access Denied</p><p style="color: #6b7280;">Refresh the page to try again</p></div></div>';
+            throw new Error("Authentication required");
+        }
+        // ===== END PASSWORD PROTECTION =====
+
         // Storage functions
         const storage = {
             get: (key) => {
@@ -229,6 +260,41 @@
 
             saveData();
             closeModal('transactionModal');
+            render();
+        }
+
+        // Delete transaction
+        function deleteTransaction(transactionId) {
+            const transaction = state.transactions.find(tx => tx.id === transactionId);
+            if (!transaction) return;
+
+            // Check if this is an investment or return transaction
+            if (transaction.type === 'investment') {
+                alert('Cannot delete investment transactions! Please close the investment first from the Investments tab.');
+                return;
+            }
+            
+            if (transaction.type === 'return') {
+                alert('Cannot delete return transactions! This was automatically created when you closed an investment.');
+                return;
+            }
+
+            // Confirm deletion
+            if (!confirm(`Delete transaction: "${transaction.description}" (${formatCurrency(transaction.amount)})?\n\nThis cannot be undone!`)) {
+                return;
+            }
+
+            // Reverse the transaction effect on angel bank
+            if (transaction.type === 'deposit') {
+                state.angelBank -= transaction.amount;
+            } else if (transaction.type === 'withdrawal') {
+                state.angelBank += transaction.amount;
+            }
+
+            // Remove from transactions
+            state.transactions = state.transactions.filter(tx => tx.id !== transactionId);
+
+            saveData();
             render();
         }
 
@@ -401,9 +467,20 @@
                                                 <p class="text-xs text-gray-500">${formatDate(tx.date)}</p>
                                             </div>
                                         </div>
-                                        <span class="font-bold text-lg ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
-                                            ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
-                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-lg ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
+                                                ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
+                                            </span>
+                                            ${tx.type === 'deposit' || tx.type === 'withdrawal' ? `
+                                                <button
+                                                    onclick="deleteTransaction('${tx.id}')"
+                                                    class="bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600 text-xs font-bold shadow-sm hover-scale transition-all"
+                                                    title="Delete"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            ` : ''}
+                                        </div>
                                     </div>
                                 `).join('') : `
                                     <div class="text-center py-8">
@@ -480,9 +557,20 @@
                                         </p>
                                     </div>
                                 </div>
-                                <span class="text-2xl font-bold ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
-                                    ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
-                                </span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-2xl font-bold ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
+                                        ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
+                                    </span>
+                                    ${tx.type === 'deposit' || tx.type === 'withdrawal' ? `
+                                        <button
+                                            onclick="deleteTransaction('${tx.id}')"
+                                            class="bg-red-500 text-white px-3 py-2 rounded-xl hover:bg-red-600 font-bold text-sm shadow-md hover-scale transition-all"
+                                            title="Delete transaction"
+                                        >
+                                            🗑️
+                                        </button>
+                                    ` : ''}
+                                </div>
                             </div>
                         `).join('') : `
                             <div class="text-center py-12 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-dashed border-purple-200">
