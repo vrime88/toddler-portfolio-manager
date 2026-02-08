@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Investment Tracker 🐷</title>
+    <title>My Investment Tracker 🦄</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -77,7 +77,7 @@
     <div id="root">
         <div class="min-h-screen bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 flex items-center justify-center">
             <div class="text-center">
-                <div class="text-6xl mb-4 animate-bounce">🐷</div>
+                <div class="text-6xl mb-4 animate-bounce">🦄</div>
                 <div class="flex justify-center gap-2 mb-4">
                     <div class="coin animate-bounce" style="animation-delay: 0s;">CHF</div>
                     <div class="coin animate-bounce" style="animation-delay: 0.3s;">CHF</div>
@@ -112,9 +112,28 @@
             }
         };
 
+        // Format number with apostrophe as thousand separator
+        function formatCurrency(amount) {
+            const parts = amount.toFixed(2).split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+            return `CHF ${parts.join('.')}`;
+        }
+
+        // Format date from YYYY-MM-DD to DD/MM/YYYY
+        function formatDate(dateString) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        // Convert date from DD/MM/YYYY to YYYY-MM-DD for storage
+        function parseDate(formattedDate) {
+            const [day, month, year] = formattedDate.split('/');
+            return `${year}-${month}-${day}`;
+        }
+
         // App state
         let state = {
-            piggyBank: 0,
+            angelBank: 0,
             transactions: [],
             investments: [],
             activeTab: 'overview',
@@ -123,18 +142,18 @@
 
         // Load data
         function loadData() {
-            const pb = storage.get('piggybank');
+            const ab = storage.get('angelbank');
             const tx = storage.get('transactions');
             const inv = storage.get('investments');
             
-            state.piggyBank = pb ? parseFloat(pb) : 0;
+            state.angelBank = ab ? parseFloat(ab) : 0;
             state.transactions = tx ? JSON.parse(tx) : [];
             state.investments = inv ? JSON.parse(inv) : [];
         }
 
         // Save data
         function saveData() {
-            storage.set('piggybank', state.piggyBank.toString());
+            storage.set('angelbank', state.angelBank.toString());
             storage.set('transactions', JSON.stringify(state.transactions));
             storage.set('investments', JSON.stringify(state.investments));
         }
@@ -147,7 +166,7 @@
                     const latestValue = inv.valueHistory[inv.valueHistory.length - 1].value;
                     return sum + latestValue;
                 }, 0);
-            return state.piggyBank + activeInvestmentsValue;
+            return state.angelBank + activeInvestmentsValue;
         }
 
         // Calculate ROI
@@ -155,6 +174,21 @@
             const currentValue = investment.valueHistory[investment.valueHistory.length - 1].value;
             const roi = ((currentValue - investment.amountInvested) / investment.amountInvested) * 100;
             return roi;
+        }
+
+        // Calculate cumulative ROI from all investments
+        function calculateCumulativeROI() {
+            if (state.investments.length === 0) return 0;
+            
+            const totalInvested = state.investments.reduce((sum, inv) => sum + inv.amountInvested, 0);
+            if (totalInvested === 0) return 0;
+            
+            const totalCurrentValue = state.investments.reduce((sum, inv) => {
+                const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                return sum + currentValue;
+            }, 0);
+            
+            return ((totalCurrentValue - totalInvested) / totalInvested) * 100;
         }
 
         // Add transaction
@@ -171,8 +205,8 @@
                 return;
             }
 
-            if (type === 'withdrawal' && amount > state.piggyBank) {
-                alert('Not enough money in piggy bank!');
+            if (type === 'withdrawal' && amount > state.angelBank) {
+                alert('Not enough money in angel bank!');
                 return;
             }
 
@@ -185,9 +219,9 @@
             };
 
             if (type === 'deposit') {
-                state.piggyBank += amount;
+                state.angelBank += amount;
             } else if (type === 'withdrawal') {
-                state.piggyBank -= amount;
+                state.angelBank -= amount;
             }
 
             state.transactions.push(newTransaction);
@@ -211,8 +245,8 @@
                 return;
             }
 
-            if (amount > state.piggyBank) {
-                alert('Not enough money in piggy bank!');
+            if (amount > state.angelBank) {
+                alert('Not enough money in angel bank!');
                 return;
             }
 
@@ -234,7 +268,7 @@
                 investmentId: newInvestment.id
             };
 
-            state.piggyBank -= amount;
+            state.angelBank -= amount;
             state.investments.push(newInvestment);
             state.transactions.push(investmentTransaction);
             state.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -272,7 +306,7 @@
 
             const finalValue = investment.valueHistory[investment.valueHistory.length - 1].value;
             
-            if (!confirm(`Close "${investment.name}" and get CHF ${finalValue.toFixed(2)} back? 🎉`)) {
+            if (!confirm(`Close "${investment.name}" and get ${formatCurrency(finalValue)} back? 🎉`)) {
                 return;
             }
 
@@ -285,7 +319,7 @@
                 investmentId: investment.id
             };
 
-            state.piggyBank += finalValue;
+            state.angelBank += finalValue;
             state.investments = state.investments.map(inv => 
                 inv.id === investmentId 
                     ? { ...inv, status: 'closed', dateClosed: new Date().toISOString().split('T')[0], finalValue }
@@ -364,16 +398,16 @@
                                             ${renderTransactionIcon(tx.type)}
                                             <div>
                                                 <p class="text-sm font-bold text-gray-800">${tx.description}</p>
-                                                <p class="text-xs text-gray-500">${tx.date}</p>
+                                                <p class="text-xs text-gray-500">${formatDate(tx.date)}</p>
                                             </div>
                                         </div>
                                         <span class="font-bold text-lg ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
-                                            ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}CHF ${tx.amount.toFixed(2)}
+                                            ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
                                         </span>
                                     </div>
                                 `).join('') : `
                                     <div class="text-center py-8">
-                                        <div class="text-6xl mb-2">🐷</div>
+                                        <div class="text-6xl mb-2">🦄</div>
                                         <p class="text-gray-400 text-sm">No transactions yet! Start by adding money 💰</p>
                                     </div>
                                 `}
@@ -401,8 +435,8 @@
                                                 </span>
                                             </div>
                                             <div class="flex items-center justify-between text-sm text-gray-600 font-medium">
-                                                <span>Started: CHF ${inv.amountInvested.toFixed(2)}</span>
-                                                <span class="font-bold text-blue-600">Now: CHF ${currentValue.toFixed(2)}</span>
+                                                <span>Started: ${formatCurrency(inv.amountInvested)}</span>
+                                                <span class="font-bold text-blue-600">Now: ${formatCurrency(currentValue)}</span>
                                             </div>
                                         </div>
                                     `;
@@ -442,19 +476,19 @@
                                     <div>
                                         <p class="font-bold text-lg text-gray-800">${tx.description}</p>
                                         <p class="text-sm text-gray-500 flex items-center gap-1 font-medium">
-                                            📅 ${tx.date}
+                                            📅 ${formatDate(tx.date)}
                                         </p>
                                     </div>
                                 </div>
                                 <span class="text-2xl font-bold ${tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'}">
-                                    ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}CHF ${tx.amount.toFixed(2)}
+                                    ${tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}${formatCurrency(tx.amount)}
                                 </span>
                             </div>
                         `).join('') : `
                             <div class="text-center py-12 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-dashed border-purple-200">
-                                <div class="text-8xl mb-4">🐷</div>
+                                <div class="text-8xl mb-4">🦄</div>
                                 <p class="text-purple-400 text-lg font-bold">No transactions yet!</p>
-                                <p class="text-purple-300">Start by adding money to your piggy bank! 💰</p>
+                                <p class="text-purple-300">Start by adding money to your angel bank! 💰</p>
                             </div>
                         `}
                     </div>
@@ -492,8 +526,8 @@
                                             <div>
                                                 <h3 class="text-xl font-bold text-gray-800">${inv.name}</h3>
                                                 <p class="text-sm text-gray-500 font-medium">
-                                                    Started: ${inv.dateStarted}
-                                                    ${inv.status === 'closed' ? ` • Finished: ${inv.dateClosed}` : ''}
+                                                    Started: ${formatDate(inv.dateStarted)}
+                                                    ${inv.status === 'closed' ? ` • Finished: ${formatDate(inv.dateClosed)}` : ''}
                                                 </p>
                                             </div>
                                         </div>
@@ -509,16 +543,16 @@
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                         <div class="bg-white p-3 rounded-xl shadow-sm">
                                             <p class="text-xs text-gray-500 font-semibold">💰 Started with</p>
-                                            <p class="font-bold text-lg text-gray-800">CHF ${inv.amountInvested.toFixed(2)}</p>
+                                            <p class="font-bold text-lg text-gray-800">${formatCurrency(inv.amountInvested)}</p>
                                         </div>
                                         <div class="bg-white p-3 rounded-xl shadow-sm">
                                             <p class="text-xs text-gray-500 font-semibold">💎 Worth Now</p>
-                                            <p class="font-bold text-lg text-blue-600">CHF ${currentValue.toFixed(2)}</p>
+                                            <p class="font-bold text-lg text-blue-600">${formatCurrency(currentValue)}</p>
                                         </div>
                                         <div class="bg-white p-3 rounded-xl shadow-sm">
                                             <p class="text-xs text-gray-500 font-semibold">${gain >= 0 ? '📈 Profit' : '📉 Loss'}</p>
                                             <p class="font-bold text-lg ${gain >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                                ${gain >= 0 ? '+' : ''}CHF ${gain.toFixed(2)}
+                                                ${gain >= 0 ? '+' : ''}${formatCurrency(Math.abs(gain))}
                                             </p>
                                         </div>
                                         <div class="bg-white p-3 rounded-xl shadow-sm">
@@ -537,7 +571,7 @@
                                             <div class="flex flex-wrap gap-2">
                                                 ${inv.valueHistory.map(vh => `
                                                     <div class="bg-purple-100 px-3 py-2 rounded-xl text-sm font-medium shadow-sm">
-                                                        ${vh.date}: CHF ${vh.value.toFixed(2)}
+                                                        ${formatDate(vh.date)}: ${formatCurrency(vh.value)}
                                                     </div>
                                                 `).join('')}
                                             </div>
@@ -610,6 +644,13 @@
             const activeInvestmentsValue = state.investments
                 .filter(inv => inv.status === 'active')
                 .reduce((sum, inv) => sum + inv.valueHistory[inv.valueHistory.length - 1].value, 0);
+            const cumulativeROI = calculateCumulativeROI();
+            const totalInvested = state.investments.reduce((sum, inv) => sum + inv.amountInvested, 0);
+            const totalCurrentValue = state.investments.reduce((sum, inv) => {
+                const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                return sum + currentValue;
+            }, 0);
+            const totalGain = totalCurrentValue - totalInvested;
 
             const today = new Date().toISOString().split('T')[0];
 
@@ -632,7 +673,7 @@
                             <div class="flex items-center justify-between mb-6">
                                 <div class="flex items-center gap-4">
                                     <div class="relative">
-                                        <div class="text-7xl">🐷</div>
+                                        <div class="text-7xl">🦄</div>
                                         <div class="absolute -top-1 -right-1 text-3xl">✨</div>
                                     </div>
                                     <div>
@@ -645,13 +686,13 @@
                             </div>
                             
                             <!-- Overview Cards -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div class="bg-gradient-to-br from-pink-400 to-pink-500 rounded-2xl p-6 text-white shadow-lg hover-scale transition-all">
                                     <div class="flex items-center justify-between mb-3">
                                         <span class="text-pink-100 font-semibold text-lg">💰 Total Money</span>
                                         <span class="text-3xl">⭐</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">CHF ${totalValue.toFixed(2)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(totalValue)}</p>
                                     <div class="flex gap-1">
                                         <div class="coin" style="width: 1rem; height: 1rem; font-size: 0.5rem;">CHF</div>
                                         <div class="coin animate-bounce" style="width: 1rem; height: 1rem; font-size: 0.5rem; animation-delay: 0.2s;">CHF</div>
@@ -661,10 +702,10 @@
                                 
                                 <div class="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-6 text-white shadow-lg hover-scale transition-all">
                                     <div class="flex items-center justify-between mb-3">
-                                        <span class="text-purple-100 font-semibold text-lg">🐷 Piggy Bank</span>
-                                        <span class="text-3xl">🐷</span>
+                                        <span class="text-purple-100 font-semibold text-lg">👼 Angel Bank</span>
+                                        <span class="text-3xl">👼</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">CHF ${state.piggyBank.toFixed(2)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(state.angelBank)}</p>
                                     <p class="text-purple-100 text-sm">Ready to spend or invest!</p>
                                 </div>
                                 
@@ -673,8 +714,17 @@
                                         <span class="text-blue-100 font-semibold text-lg">📈 Investments</span>
                                         <span class="text-3xl">📈</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">CHF ${activeInvestmentsValue.toFixed(2)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(activeInvestmentsValue)}</p>
                                     <p class="text-blue-100 text-sm">Growing your money!</p>
+                                </div>
+                                
+                                <div class="bg-gradient-to-br from-green-400 to-green-500 rounded-2xl p-6 text-white shadow-lg hover-scale transition-all">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <span class="text-green-100 font-semibold text-lg">🚀 Total ROI</span>
+                                        <span class="text-3xl">👑</span>
+                                    </div>
+                                    <p class="text-4xl font-bold mb-2">${cumulativeROI >= 0 ? '+' : ''}${cumulativeROI.toFixed(1)}%</p>
+                                    <p class="text-green-100 text-sm">${totalGain >= 0 ? '+' : ''}${formatCurrency(Math.abs(totalGain))} ${totalGain >= 0 ? 'gain' : 'loss'}!</p>
                                 </div>
                             </div>
                         </div>
@@ -729,7 +779,7 @@
                         <div class="bg-gradient-to-br from-pink-50 to-purple-50 rounded-3xl p-8 max-w-md w-full border-4 border-pink-300 shadow-2xl">
                             <div class="flex items-center justify-between mb-6">
                                 <h3 class="text-2xl font-bold text-purple-600 flex items-center gap-2">
-                                    <span class="text-3xl">🐷</span> 💰 Add/Take Money
+                                    <span class="text-3xl">👼</span> 💰 Add/Take Money
                                 </h3>
                                 <button
                                     onclick="closeModal('transactionModal')"
@@ -855,8 +905,8 @@
                                     />
                                     <div class="mt-2 p-3 bg-yellow-50 rounded-xl border-2 border-yellow-200">
                                         <p class="text-sm font-bold text-yellow-800 flex items-center gap-2">
-                                            <span class="text-2xl">🐷</span>
-                                            You have CHF ${state.piggyBank.toFixed(2)} in your piggy bank! 🐷
+                                            <span class="text-2xl">👼</span>
+                                            You have ${formatCurrency(state.angelBank)} in your angel bank! 👼
                                         </p>
                                     </div>
                                 </div>
