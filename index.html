@@ -91,7 +91,7 @@
     <script>
         // ===== PASSWORD PROTECTION =====
         // Set your password here (change "mypassword" to your desired password)
-        const APP_PASSWORD = "PrincessMelo";
+        const APP_PASSWORD = "mypassword";
         const PASSWORD_KEY = "investment_tracker_auth";
         
         // Check if already authenticated
@@ -145,7 +145,8 @@
 
         // Format number with apostrophe as thousand separator
         function formatCurrency(amount) {
-            const parts = amount.toFixed(2).split('.');
+            const value = parseFloat(amount) || 0;
+            const parts = value.toFixed(2).split('.');
             parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, "'");
             return `CHF ${parts.join('.')}`;
         }
@@ -177,16 +178,16 @@
             const tx = storage.get('transactions');
             const inv = storage.get('investments');
             
-            state.angelBank = ab ? parseFloat(ab) : 0;
+            state.angelBank = ab ? parseFloat(ab) || 0 : 0;
             state.transactions = tx ? JSON.parse(tx) : [];
             state.investments = inv ? JSON.parse(inv) : [];
         }
 
         // Save data
         function saveData() {
-            storage.set('angelbank', state.angelBank.toString());
-            storage.set('transactions', JSON.stringify(state.transactions));
-            storage.set('investments', JSON.stringify(state.investments));
+            storage.set('angelbank', (state.angelBank || 0).toString());
+            storage.set('transactions', JSON.stringify(state.transactions || []));
+            storage.set('investments', JSON.stringify(state.investments || []));
         }
 
         // Calculate total value
@@ -194,17 +195,13 @@
             const activeInvestmentsValue = state.investments
                 .filter(inv => inv.status === 'active')
                 .reduce((sum, inv) => {
-                    const latestValue = inv.valueHistory[inv.valueHistory.length - 1].value;
-                    return sum + latestValue;
+                    if (inv.valueHistory && inv.valueHistory.length > 0) {
+                        const latestValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                        return sum + latestValue;
+                    }
+                    return sum;
                 }, 0);
-            return state.angelBank + activeInvestmentsValue;
-        }
-
-        // Calculate ROI
-        function calculateROI(investment) {
-            const currentValue = investment.valueHistory[investment.valueHistory.length - 1].value;
-            const roi = ((currentValue - investment.amountInvested) / investment.amountInvested) * 100;
-            return roi;
+            return (state.angelBank || 0) + activeInvestmentsValue;
         }
 
         // Calculate cumulative ROI from all investments
@@ -215,11 +212,22 @@
             if (totalInvested === 0) return 0;
             
             const totalCurrentValue = state.investments.reduce((sum, inv) => {
-                const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
-                return sum + currentValue;
+                if (inv.valueHistory && inv.valueHistory.length > 0) {
+                    const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                    return sum + currentValue;
+                }
+                return sum;
             }, 0);
             
             return ((totalCurrentValue - totalInvested) / totalInvested) * 100;
+        }
+
+        // Calculate ROI
+        function calculateROI(investment) {
+            if (!investment.valueHistory || investment.valueHistory.length === 0) return 0;
+            const currentValue = investment.valueHistory[investment.valueHistory.length - 1].value;
+            const roi = ((currentValue - investment.amountInvested) / investment.amountInvested) * 100;
+            return roi;
         }
 
         // Add transaction
@@ -291,9 +299,13 @@
                 state.angelBank += transaction.amount;
             }
 
+            // Ensure angelBank doesn't go negative
+            if (state.angelBank < 0) state.angelBank = 0;
+
             // Remove from transactions
             state.transactions = state.transactions.filter(tx => tx.id !== transactionId);
 
+            // Save and re-render
             saveData();
             render();
         }
@@ -423,16 +435,19 @@
             // Adjust angel bank balance
             if (investment.status === 'active') {
                 // Investment is active: return the invested money
-                state.angelBank += investment.amountInvested;
+                state.angelBank = (state.angelBank || 0) + investment.amountInvested;
             } else {
                 // Investment is closed: reverse both transactions
                 // Reverse investment transaction (add back the invested amount)
-                state.angelBank += investment.amountInvested;
+                state.angelBank = (state.angelBank || 0) + investment.amountInvested;
                 // Reverse return transaction (remove the returned amount)
                 if (returnTransaction) {
-                    state.angelBank -= returnTransaction.amount;
+                    state.angelBank = state.angelBank - returnTransaction.amount;
                 }
             }
+
+            // Ensure angelBank doesn't go negative
+            if (state.angelBank < 0) state.angelBank = 0;
 
             // Remove investment
             state.investments = state.investments.filter(inv => inv.id !== investmentId);
@@ -442,6 +457,7 @@
                 tx => tx.investmentId !== investmentId
             );
 
+            // Save and re-render
             saveData();
             render();
         }
@@ -796,12 +812,20 @@
             const totalValue = calculateTotalValue();
             const activeInvestmentsValue = state.investments
                 .filter(inv => inv.status === 'active')
-                .reduce((sum, inv) => sum + inv.valueHistory[inv.valueHistory.length - 1].value, 0);
+                .reduce((sum, inv) => {
+                    if (inv.valueHistory && inv.valueHistory.length > 0) {
+                        return sum + inv.valueHistory[inv.valueHistory.length - 1].value;
+                    }
+                    return sum;
+                }, 0);
             const cumulativeROI = calculateCumulativeROI();
             const totalInvested = state.investments.reduce((sum, inv) => sum + inv.amountInvested, 0);
             const totalCurrentValue = state.investments.reduce((sum, inv) => {
-                const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
-                return sum + currentValue;
+                if (inv.valueHistory && inv.valueHistory.length > 0) {
+                    const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                    return sum + currentValue;
+                }
+                return sum;
             }, 0);
             const totalGain = totalCurrentValue - totalInvested;
 
@@ -845,7 +869,7 @@
                                         <span class="text-pink-100 font-semibold text-lg">💰 Total Money</span>
                                         <span class="text-3xl">⭐</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">${formatCurrency(totalValue)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(totalValue || 0)}</p>
                                     <div class="flex gap-1">
                                         <div class="coin" style="width: 1rem; height: 1rem; font-size: 0.5rem;">CHF</div>
                                         <div class="coin animate-bounce" style="width: 1rem; height: 1rem; font-size: 0.5rem; animation-delay: 0.2s;">CHF</div>
@@ -858,7 +882,7 @@
                                         <span class="text-purple-100 font-semibold text-lg">👼 Angel Bank</span>
                                         <span class="text-3xl">👼</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">${formatCurrency(state.angelBank)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(state.angelBank || 0)}</p>
                                     <p class="text-purple-100 text-sm">Ready to spend or invest!</p>
                                 </div>
                                 
@@ -867,7 +891,7 @@
                                         <span class="text-blue-100 font-semibold text-lg">📈 Investments</span>
                                         <span class="text-3xl">📈</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">${formatCurrency(activeInvestmentsValue)}</p>
+                                    <p class="text-4xl font-bold mb-2">${formatCurrency(activeInvestmentsValue || 0)}</p>
                                     <p class="text-blue-100 text-sm">Growing your money!</p>
                                 </div>
                                 
@@ -876,8 +900,12 @@
                                         <span class="text-green-100 font-semibold text-lg">🚀 Total ROI</span>
                                         <span class="text-3xl">👑</span>
                                     </div>
-                                    <p class="text-4xl font-bold mb-2">${cumulativeROI >= 0 ? '+' : ''}${cumulativeROI.toFixed(1)}%</p>
-                                    <p class="text-green-100 text-sm">${totalGain >= 0 ? '+' : ''}${formatCurrency(Math.abs(totalGain))} ${totalGain >= 0 ? 'gain' : 'loss'}!</p>
+                                    <p class="text-4xl font-bold mb-2">${cumulativeROI >= 0 ? '+' : ''}${(cumulativeROI || 0).toFixed(1)}%</p>
+                                    <p class="text-green-100 text-sm">${
+                                        state.investments.length === 0 
+                                            ? 'No investments yet' 
+                                            : `${totalGain >= 0 ? '+' : ''}${formatCurrency(Math.abs(totalGain || 0))} ${totalGain >= 0 ? 'gain' : 'loss'}!`
+                                    }</p>
                                 </div>
                             </div>
                         </div>
