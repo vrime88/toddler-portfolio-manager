@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Investment Tracker 🐷</title>
+    
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide React Icons -->
+    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(-25%);
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+            }
+            50% {
+                transform: translateY(0);
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+            }
+        }
+        
+        .animate-bounce {
+            animation: bounce 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { 
+            PiggyBank, TrendingUp, DollarSign, Calendar, Plus, Edit2, X, Check, 
+            ArrowUpCircle, ArrowDownCircle, Sparkles, Star 
+        } = lucide;
+
+        // Simple localStorage-based storage for standalone version
+        const storage = {
+            get: (key) => {
+                return new Promise((resolve) => {
+                    const value = localStorage.getItem(key);
+                    resolve(value ? { key, value } : null);
+                });
+            },
+            set: (key, value) => {
+                return new Promise((resolve) => {
+                    localStorage.setItem(key, value);
+                    resolve({ key, value });
+                });
+            }
+        };
+
+        // Coin component
+        const Coin = ({ delay = 0, size = 'w-8 h-8' }) => (
+            <div 
+                className={`${size} rounded-full bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-500 border-2 border-yellow-600 flex items-center justify-center shadow-lg animate-bounce`}
+                style={{ animationDelay: `${delay}s`, animationDuration: '2s' }}
+            >
+                <span className="text-yellow-700 font-bold text-xs">CHF</span>
+            </div>
+        );
+
+        function InvestmentTracker() {
+            const [piggyBank, setPiggyBank] = useState(0);
+            const [transactions, setTransactions] = useState([]);
+            const [investments, setInvestments] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('overview');
+            
+            // Form states
+            const [showTransactionForm, setShowTransactionForm] = useState(false);
+            const [showInvestmentForm, setShowInvestmentForm] = useState(false);
+            const [editingInvestment, setEditingInvestment] = useState(null);
+            
+            // Transaction form
+            const [txType, setTxType] = useState('deposit');
+            const [txAmount, setTxAmount] = useState('');
+            const [txDescription, setTxDescription] = useState('');
+            const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
+            
+            // Investment form
+            const [invName, setInvName] = useState('');
+            const [invAmount, setInvAmount] = useState('');
+            const [invDate, setInvDate] = useState(new Date().toISOString().split('T')[0]);
+            
+            // Value update form
+            const [updateValue, setUpdateValue] = useState('');
+            const [updateDate, setUpdateDate] = useState(new Date().toISOString().split('T')[0]);
+
+            // Load data on mount
+            useEffect(() => {
+                loadData();
+            }, []);
+
+            const loadData = async () => {
+                try {
+                    const pbResult = await storage.get('piggybank');
+                    const txResult = await storage.get('transactions');
+                    const invResult = await storage.get('investments');
+
+                    setPiggyBank(pbResult ? parseFloat(pbResult.value) : 0);
+                    setTransactions(txResult ? JSON.parse(txResult.value) : []);
+                    setInvestments(invResult ? JSON.parse(invResult.value) : []);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const saveData = async (newPiggyBank, newTransactions, newInvestments) => {
+                try {
+                    await Promise.all([
+                        storage.set('piggybank', newPiggyBank.toString()),
+                        storage.set('transactions', JSON.stringify(newTransactions)),
+                        storage.set('investments', JSON.stringify(newInvestments))
+                    ]);
+                } catch (error) {
+                    console.error('Error saving data:', error);
+                    alert('Failed to save data. Please try again.');
+                }
+            };
+
+            const addTransaction = async (e) => {
+                e.preventDefault();
+                const amount = parseFloat(txAmount);
+                if (isNaN(amount) || amount <= 0) return;
+
+                const newTransaction = {
+                    id: Date.now().toString(),
+                    date: txDate,
+                    type: txType,
+                    amount: amount,
+                    description: txDescription
+                };
+
+                let newPiggyBank = piggyBank;
+                if (txType === 'deposit') {
+                    newPiggyBank += amount;
+                } else if (txType === 'withdrawal') {
+                    if (amount > piggyBank) {
+                        alert('Not enough money in piggy bank!');
+                        return;
+                    }
+                    newPiggyBank -= amount;
+                }
+
+                const newTransactions = [...transactions, newTransaction].sort((a, b) => 
+                    new Date(b.date) - new Date(a.date)
+                );
+
+                setPiggyBank(newPiggyBank);
+                setTransactions(newTransactions);
+                await saveData(newPiggyBank, newTransactions, investments);
+
+                // Reset form
+                setTxAmount('');
+                setTxDescription('');
+                setTxDate(new Date().toISOString().split('T')[0]);
+                setShowTransactionForm(false);
+            };
+
+            const createInvestment = async (e) => {
+                e.preventDefault();
+                const amount = parseFloat(invAmount);
+                if (isNaN(amount) || amount <= 0) return;
+
+                if (amount > piggyBank) {
+                    alert('Not enough money in piggy bank!');
+                    return;
+                }
+
+                const newInvestment = {
+                    id: Date.now().toString(),
+                    name: invName,
+                    amountInvested: amount,
+                    dateStarted: invDate,
+                    status: 'active',
+                    valueHistory: [{ date: invDate, value: amount }]
+                };
+
+                const investmentTransaction = {
+                    id: (Date.now() + 1).toString(),
+                    date: invDate,
+                    type: 'investment',
+                    amount: amount,
+                    description: `Investment: ${invName}`,
+                    investmentId: newInvestment.id
+                };
+
+                const newPiggyBank = piggyBank - amount;
+                const newInvestments = [...investments, newInvestment];
+                const newTransactions = [...transactions, investmentTransaction].sort((a, b) => 
+                    new Date(b.date) - new Date(a.date)
+                );
+
+                setPiggyBank(newPiggyBank);
+                setInvestments(newInvestments);
+                setTransactions(newTransactions);
+                await saveData(newPiggyBank, newTransactions, newInvestments);
+
+                // Reset form
+                setInvName('');
+                setInvAmount('');
+                setInvDate(new Date().toISOString().split('T')[0]);
+                setShowInvestmentForm(false);
+            };
+
+            const updateInvestmentValue = async (investmentId) => {
+                const value = parseFloat(updateValue);
+                if (isNaN(value) || value <= 0) return;
+
+                const newInvestments = investments.map(inv => {
+                    if (inv.id === investmentId) {
+                        const valueHistory = [...inv.valueHistory, { date: updateDate, value }]
+                            .sort((a, b) => new Date(a.date) - new Date(b.date));
+                        return { ...inv, valueHistory };
+                    }
+                    return inv;
+                });
+
+                setInvestments(newInvestments);
+                await saveData(piggyBank, transactions, newInvestments);
+                
+                setUpdateValue('');
+                setUpdateDate(new Date().toISOString().split('T')[0]);
+                setEditingInvestment(null);
+            };
+
+            const closeInvestment = async (investmentId) => {
+                const investment = investments.find(inv => inv.id === investmentId);
+                if (!investment) return;
+
+                const finalValue = investment.valueHistory[investment.valueHistory.length - 1].value;
+                const returnTransaction = {
+                    id: Date.now().toString(),
+                    date: new Date().toISOString().split('T')[0],
+                    type: 'return',
+                    amount: finalValue,
+                    description: `Investment Return: ${investment.name}`,
+                    investmentId: investment.id
+                };
+
+                const newPiggyBank = piggyBank + finalValue;
+                const newInvestments = investments.map(inv => 
+                    inv.id === investmentId 
+                        ? { ...inv, status: 'closed', dateClosed: new Date().toISOString().split('T')[0], finalValue }
+                        : inv
+                );
+                const newTransactions = [...transactions, returnTransaction].sort((a, b) => 
+                    new Date(b.date) - new Date(a.date)
+                );
+
+                setPiggyBank(newPiggyBank);
+                setInvestments(newInvestments);
+                setTransactions(newTransactions);
+                await saveData(newPiggyBank, newTransactions, newInvestments);
+            };
+
+            const calculateTotalValue = () => {
+                const activeInvestmentsValue = investments
+                    .filter(inv => inv.status === 'active')
+                    .reduce((sum, inv) => {
+                        const latestValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                        return sum + latestValue;
+                    }, 0);
+                return piggyBank + activeInvestmentsValue;
+            };
+
+            const calculateROI = (investment) => {
+                const currentValue = investment.valueHistory[investment.valueHistory.length - 1].value;
+                const roi = ((currentValue - investment.amountInvested) / investment.amountInvested) * 100;
+                return roi;
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 flex items-center justify-center">
+                        <div className="text-center">
+                            <PiggyBank className="w-20 h-20 text-pink-500 mx-auto mb-4 animate-bounce" />
+                            <div className="flex justify-center gap-2 mb-4">
+                                <Coin delay={0} />
+                                <Coin delay={0.3} />
+                                <Coin delay={0.6} />
+                            </div>
+                            <p className="text-purple-700 text-xl font-bold">Loading your money...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 p-4">
+                    <div className="max-w-6xl mx-auto">
+                        {/* Decorative coins */}
+                        <div className="fixed top-4 right-4 opacity-50">
+                            <Coin size="w-12 h-12" />
+                        </div>
+                        <div className="fixed bottom-4 left-4 opacity-50">
+                            <Coin delay={0.5} size="w-10 h-10" />
+                        </div>
+                        <div className="fixed top-20 left-10 opacity-30">
+                            <Coin delay={1} size="w-6 h-6" />
+                        </div>
+                        
+                        {/* Header */}
+                        <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6 border-4 border-purple-300">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="relative">
+                                        <PiggyBank className="w-16 h-16 text-pink-500" />
+                                        <Sparkles className="w-6 h-6 text-yellow-400 absolute -top-1 -right-1" />
+                                    </div>
+                                    <div>
+                                        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600">
+                                            My Money Adventure! 🎉
+                                        </h1>
+                                        <p className="text-purple-600 font-medium">Learn to save and invest!</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Overview Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-gradient-to-br from-pink-400 to-pink-500 rounded-2xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-pink-100 font-semibold text-lg">💰 Total Money</span>
+                                        <Star className="w-6 h-6 text-yellow-300" />
+                                    </div>
+                                    <p className="text-4xl font-bold mb-2">CHF {calculateTotalValue().toFixed(2)}</p>
+                                    <div className="flex gap-1">
+                                        <Coin size="w-4 h-4" />
+                                        <Coin size="w-4 h-4" delay={0.2} />
+                                        <Coin size="w-4 h-4" delay={0.4} />
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-2xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-purple-100 font-semibold text-lg">🐷 Piggy Bank</span>
+                                        <PiggyBank className="w-6 h-6" />
+                                    </div>
+                                    <p className="text-4xl font-bold mb-2">CHF {piggyBank.toFixed(2)}</p>
+                                    <p className="text-purple-100 text-sm">Ready to spend or invest!</p>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-blue-100 font-semibold text-lg">📈 Investments</span>
+                                        <TrendingUp className="w-6 h-6" />
+                                    </div>
+                                    <p className="text-4xl font-bold mb-2">
+                                        CHF {investments
+                                            .filter(inv => inv.status === 'active')
+                                            .reduce((sum, inv) => sum + inv.valueHistory[inv.valueHistory.length - 1].value, 0)
+                                            .toFixed(2)}
+                                    </p>
+                                    <p className="text-blue-100 text-sm">Growing your money!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="bg-white rounded-3xl shadow-2xl mb-6 border-4 border-purple-300">
+                            <div className="border-b-4 border-purple-200">
+                                <div className="flex">
+                                    {['overview', 'transactions', 'investments'].map(tab => (
+                                        <button
+                                            key={tab}
+                                            onClick={() => setActiveTab(tab)}
+                                            className={`px-6 py-4 font-bold capitalize text-lg transition-all ${
+                                                activeTab === tab
+                                                    ? 'border-b-4 border-pink-500 text-pink-600 bg-pink-50'
+                                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {tab === 'overview' && '🏠 '}
+                                            {tab === 'transactions' && '💸 '}
+                                            {tab === 'investments' && '🌱 '}
+                                            {tab}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="p-6">
+                                {/* Overview Tab */}
+                                {activeTab === 'overview' && (
+                                    <div className="space-y-6">
+                                        <div className="flex gap-4">
+                                            <button
+                                                onClick={() => setShowTransactionForm(true)}
+                                                className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-3 rounded-2xl hover:from-pink-600 hover:to-pink-700 shadow-lg font-bold text-lg transform hover:scale-105 transition-transform"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                                💰 Add Money
+                                            </button>
+                                            <button
+                                                onClick={() => setShowInvestmentForm(true)}
+                                                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-2xl hover:from-blue-600 hover:to-blue-700 shadow-lg font-bold text-lg transform hover:scale-105 transition-transform"
+                                            >
+                                                <TrendingUp className="w-5 h-5" />
+                                                🌱 New Investment
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Recent Transactions */}
+                                            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-5 border-3 border-yellow-200 shadow-lg">
+                                                <h3 className="font-bold text-gray-800 mb-4 text-xl flex items-center gap-2">
+                                                    <Calendar className="w-6 h-6 text-orange-500" />
+                                                    📝 Recent Activity
+                                                </h3>
+                                                <div className="space-y-3">
+                                                    {transactions.slice(0, 5).map(tx => (
+                                                        <div key={tx.id} className="flex items-center justify-between bg-white p-4 rounded-xl shadow-md border-2 border-yellow-100">
+                                                            <div className="flex items-center gap-3">
+                                                                {tx.type === 'deposit' && <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">💵</div>}
+                                                                {tx.type === 'withdrawal' && <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">🏪</div>}
+                                                                {tx.type === 'investment' && <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">🌱</div>}
+                                                                {tx.type === 'return' && <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">🎉</div>}
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-gray-800">{tx.description}</p>
+                                                                    <p className="text-xs text-gray-500">{tx.date}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`font-bold text-lg ${
+                                                                tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'
+                                                            }`}>
+                                                                {tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}CHF {tx.amount.toFixed(2)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                    {transactions.length === 0 && (
+                                                        <div className="text-center py-8">
+                                                            <PiggyBank className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                                                            <p className="text-gray-400 text-sm">No transactions yet! Start by adding money 💰</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Active Investments */}
+                                            <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-5 border-3 border-green-200 shadow-lg">
+                                                <h3 className="font-bold text-gray-800 mb-4 text-xl flex items-center gap-2">
+                                                    <TrendingUp className="w-6 h-6 text-green-500" />
+                                                    🌱 My Investments
+                                                </h3>
+                                                <div className="space-y-3">
+                                                    {investments.filter(inv => inv.status === 'active').map(inv => {
+                                                        const roi = calculateROI(inv);
+                                                        const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                                                        return (
+                                                            <div key={inv.id} className="bg-white p-4 rounded-xl shadow-md border-2 border-green-100">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <p className="font-bold text-gray-800 flex items-center gap-2">
+                                                                        <span className="text-2xl">📈</span>
+                                                                        {inv.name}
+                                                                    </p>
+                                                                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${roi >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                        {roi >= 0 ? '😊 +' : '😢 '}{roi.toFixed(1)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-sm text-gray-600 font-medium">
+                                                                    <span>Started: CHF {inv.amountInvested.toFixed(2)}</span>
+                                                                    <span className="font-bold text-blue-600">Now: CHF {currentValue.toFixed(2)}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {investments.filter(inv => inv.status === 'active').length === 0 && (
+                                                        <div className="text-center py-8">
+                                                            <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                                                            <p className="text-gray-400 text-sm">No investments yet! Start growing your money 🌱</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Transactions Tab */}
+                                {activeTab === 'transactions' && (
+                                    <div>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h2 className="text-2xl font-bold text-purple-600 flex items-center gap-2">
+                                                💸 All My Transactions
+                                            </h2>
+                                            <button
+                                                onClick={() => setShowTransactionForm(true)}
+                                                className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 py-3 rounded-2xl hover:from-pink-600 hover:to-pink-700 shadow-lg font-bold transform hover:scale-105 transition-transform"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                                Add Money
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {transactions.map(tx => (
+                                                <div key={tx.id} className="flex items-center justify-between bg-gradient-to-r from-white to-purple-50 p-5 rounded-2xl shadow-lg border-2 border-purple-100">
+                                                    <div className="flex items-center gap-4">
+                                                        {tx.type === 'deposit' && <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center text-2xl">💵</div>}
+                                                        {tx.type === 'withdrawal' && <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl">🏪</div>}
+                                                        {tx.type === 'investment' && <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center text-2xl">🌱</div>}
+                                                        {tx.type === 'return' && <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center text-2xl">🎉</div>}
+                                                        <div>
+                                                            <p className="font-bold text-lg text-gray-800">{tx.description}</p>
+                                                            <p className="text-sm text-gray-500 flex items-center gap-1 font-medium">
+                                                                <Calendar className="w-4 h-4" />
+                                                                {tx.date}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-2xl font-bold ${
+                                                        tx.type === 'deposit' || tx.type === 'return' ? 'text-green-600' : 'text-red-600'
+                                                    }`}>
+                                                        {tx.type === 'deposit' || tx.type === 'return' ? '+' : '-'}CHF {tx.amount.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {transactions.length === 0 && (
+                                                <div className="text-center py-12 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-dashed border-purple-200">
+                                                    <PiggyBank className="w-20 h-20 text-purple-300 mx-auto mb-4" />
+                                                    <p className="text-purple-400 text-lg font-bold">No transactions yet!</p>
+                                                    <p className="text-purple-300">Start by adding money to your piggy bank! 💰</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Investments Tab */}
+                                {activeTab === 'investments' && (
+                                    <div>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h2 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                                🌱 My Investments
+                                            </h2>
+                                            <button
+                                                onClick={() => setShowInvestmentForm(true)}
+                                                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-2xl hover:from-blue-600 hover:to-blue-700 shadow-lg font-bold transform hover:scale-105 transition-transform"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                                New Investment
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {investments.map(inv => {
+                                                const roi = calculateROI(inv);
+                                                const currentValue = inv.valueHistory[inv.valueHistory.length - 1].value;
+                                                const gain = currentValue - inv.amountInvested;
+
+                                                return (
+                                                    <div key={inv.id} className="bg-gradient-to-br from-white to-blue-50 rounded-2xl p-6 shadow-lg border-3 border-blue-200">
+                                                        <div className="flex items-start justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-4xl">📈</span>
+                                                                <div>
+                                                                    <h3 className="text-xl font-bold text-gray-800">{inv.name}</h3>
+                                                                    <p className="text-sm text-gray-500 font-medium">
+                                                                        Started: {inv.dateStarted}
+                                                                        {inv.status === 'closed' && ` • Finished: ${inv.dateClosed}`}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`px-4 py-2 rounded-full text-sm font-bold shadow-md ${
+                                                                inv.status === 'active' 
+                                                                    ? 'bg-gradient-to-r from-green-400 to-green-500 text-white' 
+                                                                    : 'bg-gray-200 text-gray-700'
+                                                            }`}>
+                                                                {inv.status === 'active' ? '✨ Active' : '✅ Closed'}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm">
+                                                                <p className="text-xs text-gray-500 font-semibold">💰 Started with</p>
+                                                                <p className="font-bold text-lg text-gray-800">CHF {inv.amountInvested.toFixed(2)}</p>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm">
+                                                                <p className="text-xs text-gray-500 font-semibold">💎 Worth Now</p>
+                                                                <p className="font-bold text-lg text-blue-600">CHF {currentValue.toFixed(2)}</p>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm">
+                                                                <p className="text-xs text-gray-500 font-semibold">{gain >= 0 ? '📈 Profit' : '📉 Loss'}</p>
+                                                                <p className={`font-bold text-lg ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {gain >= 0 ? '+' : ''}CHF {gain.toFixed(2)}
+                                                                </p>
+                                                            </div>
+                                                            <div className="bg-white p-3 rounded-xl shadow-sm">
+                                                                <p className="text-xs text-gray-500 font-semibold">⚡ ROI</p>
+                                                                <p className={`font-bold text-lg ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {roi >= 0 ? '😊 +' : '😢 '}{roi.toFixed(1)}%
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Value History */}
+                                                        {inv.valueHistory.length > 1 && (
+                                                            <div className="mb-4">
+                                                                <p className="text-sm text-gray-600 mb-2 font-bold flex items-center gap-2">
+                                                                    <Calendar className="w-4 h-4" />
+                                                                    📊 History:
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {inv.valueHistory.map((vh, idx) => (
+                                                                        <div key={idx} className="bg-purple-100 px-3 py-2 rounded-xl text-sm font-medium shadow-sm">
+                                                                            {vh.date}: CHF {vh.value.toFixed(2)}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {inv.status === 'active' && (
+                                                            <div className="flex gap-3">
+                                                                {editingInvestment === inv.id ? (
+                                                                    <div className="flex gap-2 items-center w-full">
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.01"
+                                                                            placeholder="New value"
+                                                                            value={updateValue}
+                                                                            onChange={(e) => setUpdateValue(e.target.value)}
+                                                                            className="flex-1 px-4 py-2 border-2 border-purple-300 rounded-xl font-medium"
+                                                                        />
+                                                                        <input
+                                                                            type="date"
+                                                                            value={updateDate}
+                                                                            onChange={(e) => setUpdateDate(e.target.value)}
+                                                                            className="px-4 py-2 border-2 border-purple-300 rounded-xl font-medium"
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => updateInvestmentValue(inv.id)}
+                                                                            className="bg-green-500 text-white px-4 py-2 rounded-xl hover:bg-green-600 font-bold shadow-md"
+                                                                        >
+                                                                            <Check className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => setEditingInvestment(null)}
+                                                                            className="bg-gray-300 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-400 font-bold shadow-md"
+                                                                        >
+                                                                            <X className="w-5 h-5" />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => setEditingInvestment(inv.id)}
+                                                                            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-600 shadow-md transform hover:scale-105 transition-transform"
+                                                                        >
+                                                                            <Edit2 className="w-4 h-4" />
+                                                                            Update Value
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (window.confirm(`Close "${inv.name}" and get CHF ${currentValue.toFixed(2)} back? 🎉`)) {
+                                                                                    closeInvestment(inv.id);
+                                                                                }
+                                                                            }}
+                                                                            className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-600 shadow-md transform hover:scale-105 transition-transform"
+                                                                        >
+                                                                            <ArrowDownCircle className="w-4 h-4" />
+                                                                            Finish & Get Money
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            {investments.length === 0 && (
+                                                <div className="text-center py-16 bg-gradient-to-br from-blue-50 to-green-50 rounded-2xl border-2 border-dashed border-blue-200">
+                                                    <TrendingUp className="w-24 h-24 text-blue-300 mx-auto mb-4" />
+                                                    <p className="text-blue-400 text-xl font-bold mb-2">No investments yet!</p>
+                                                    <p className="text-blue-300 text-lg">Create your first investment to start growing your money! 🌱✨</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Transaction Form Modal */}
+                    {showTransactionForm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-3xl p-8 max-w-md w-full border-4 border-pink-300 shadow-2xl">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-2xl font-bold text-purple-600 flex items-center gap-2">
+                                        <PiggyBank className="w-8 h-8 text-pink-500" />
+                                        💰 Add/Take Money
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowTransactionForm(false)}
+                                        className="text-gray-400 hover:text-gray-600 bg-white rounded-full p-2"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                
+                                <form onSubmit={addTransaction} className="space-y-5">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">🎯</span> What are you doing?
+                                        </label>
+                                        <select
+                                            value={txType}
+                                            onChange={(e) => setTxType(e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-purple-300 rounded-2xl font-medium text-lg focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                                        >
+                                            <option value="deposit">💵 Adding Money (Deposit)</option>
+                                            <option value="withdrawal">🏪 Taking Out Money (Withdrawal)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">💰</span> How much? (CHF)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={txAmount}
+                                            onChange={(e) => setTxAmount(e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-purple-300 rounded-2xl font-medium text-lg focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                                            required
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">📝</span> What's it for?
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={txDescription}
+                                            onChange={(e) => setTxDescription(e.target.value)}
+                                            placeholder="e.g., Allowance from Mom & Dad"
+                                            className="w-full px-4 py-3 border-2 border-purple-300 rounded-2xl font-medium focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">📅</span> What day?
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={txDate}
+                                            onChange={(e) => setTxDate(e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-purple-300 rounded-2xl font-medium focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex gap-3 pt-2">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white py-4 rounded-2xl hover:from-pink-600 hover:to-purple-600 font-bold text-lg shadow-lg transform hover:scale-105 transition-transform"
+                                        >
+                                            ✨ Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowTransactionForm(false)}
+                                            className="px-6 bg-gray-200 text-gray-700 py-4 rounded-2xl hover:bg-gray-300 font-bold text-lg"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Investment Form Modal */}
+                    {showInvestmentForm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-3xl p-8 max-w-md w-full border-4 border-blue-300 shadow-2xl">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                        <TrendingUp className="w-8 h-8 text-green-500" />
+                                        🌱 New Investment
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowInvestmentForm(false)}
+                                        className="text-gray-400 hover:text-gray-600 bg-white rounded-full p-2"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                
+                                <form onSubmit={createInvestment} className="space-y-5">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">📈</span> What's your investment called?
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={invName}
+                                            onChange={(e) => setInvName(e.target.value)}
+                                            placeholder="e.g., Lemonade Stand, Magic Seeds"
+                                            className="w-full px-4 py-3 border-2 border-blue-300 rounded-2xl font-medium focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">💰</span> How much to invest? (CHF)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={invAmount}
+                                            onChange={(e) => setInvAmount(e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-blue-300 rounded-2xl font-medium text-lg focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                                            required
+                                            placeholder="0.00"
+                                        />
+                                        <div className="mt-2 p-3 bg-yellow-50 rounded-xl border-2 border-yellow-200">
+                                            <p className="text-sm font-bold text-yellow-800 flex items-center gap-2">
+                                                <PiggyBank className="w-4 h-4" />
+                                                You have CHF {piggyBank.toFixed(2)} in your piggy bank! 🐷
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                            <span className="text-lg">📅</span> When did you start?
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={invDate}
+                                            onChange={(e) => setInvDate(e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-blue-300 rounded-2xl font-medium focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex gap-3 pt-2">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 text-white py-4 rounded-2xl hover:from-blue-600 hover:to-green-600 font-bold text-lg shadow-lg transform hover:scale-105 transition-transform"
+                                        >
+                                            🚀 Start Growing!
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowInvestmentForm(false)}
+                                            className="px-6 bg-gray-200 text-gray-700 py-4 rounded-2xl hover:bg-gray-300 font-bold text-lg"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<InvestmentTracker />);
+    </script>
+</body>
+</html>
