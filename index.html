@@ -91,7 +91,7 @@
     <script>
         // ===== PASSWORD PROTECTION =====
         // Set your password here (change "mypassword" to your desired password)
-        const APP_PASSWORD = "PrincessMelo";
+        const APP_PASSWORD = "mypassword";
         const PASSWORD_KEY = "investment_tracker_auth";
         
         // Check if already authenticated
@@ -393,6 +393,54 @@
             );
             state.transactions.push(returnTransaction);
             state.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            saveData();
+            render();
+        }
+
+        // Delete investment
+        function deleteInvestment(investmentId) {
+            const investment = state.investments.find(inv => inv.id === investmentId);
+            if (!investment) return;
+
+            // Confirm deletion
+            const confirmMessage = investment.status === 'active' 
+                ? `Delete investment "${investment.name}"?\n\nThis will:\n- Remove the investment\n- Delete the investment transaction\n- Return ${formatCurrency(investment.amountInvested)} to Angel Bank\n\nThis cannot be undone!`
+                : `Delete closed investment "${investment.name}"?\n\nThis will:\n- Remove the investment from history\n- Delete all related transactions\n- Adjust Angel Bank balance\n\nThis cannot be undone!`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            // Find related transactions
+            const investmentTransaction = state.transactions.find(
+                tx => tx.type === 'investment' && tx.investmentId === investmentId
+            );
+            const returnTransaction = state.transactions.find(
+                tx => tx.type === 'return' && tx.investmentId === investmentId
+            );
+
+            // Adjust angel bank balance
+            if (investment.status === 'active') {
+                // Investment is active: return the invested money
+                state.angelBank += investment.amountInvested;
+            } else {
+                // Investment is closed: reverse both transactions
+                // Reverse investment transaction (add back the invested amount)
+                state.angelBank += investment.amountInvested;
+                // Reverse return transaction (remove the returned amount)
+                if (returnTransaction) {
+                    state.angelBank -= returnTransaction.amount;
+                }
+            }
+
+            // Remove investment
+            state.investments = state.investments.filter(inv => inv.id !== investmentId);
+
+            // Remove related transactions
+            state.transactions = state.transactions.filter(
+                tx => tx.investmentId !== investmentId
+            );
 
             saveData();
             render();
@@ -709,9 +757,26 @@
                                                 >
                                                     💰 Finish & Get Money
                                                 </button>
+                                                <button
+                                                    onclick="deleteInvestment('${inv.id}')"
+                                                    class="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 shadow-md hover-scale transition-all"
+                                                    title="Delete investment"
+                                                >
+                                                    🗑️ Delete
+                                                </button>
                                             </div>
                                         `}
-                                    ` : ''}
+                                    ` : `
+                                        <div class="flex gap-3">
+                                            <button
+                                                onclick="deleteInvestment('${inv.id}')"
+                                                class="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 shadow-md hover-scale transition-all"
+                                                title="Delete closed investment"
+                                            >
+                                                🗑️ Delete from History
+                                            </button>
+                                        </div>
+                                    `}
                                 </div>
                             `;
                         }).join('') : `
